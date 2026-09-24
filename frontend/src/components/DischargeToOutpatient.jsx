@@ -1,0 +1,11 @@
+import { useEffect, useState } from 'react';
+import { LogOut, RefreshCw } from 'lucide-react';
+import { api } from '../services/api';
+
+export default function DischargeToOutpatient() {
+  const [admissions, setAdmissions] = useState([]); const [selected, setSelected] = useState(''); const [summary, setSummary] = useState(''); const [diagnosis, setDiagnosis] = useState(''); const [message, setMessage] = useState('');
+  async function load() { try { setAdmissions(await api('/admissions?active=true')); } catch (error) { setMessage(error.message); } }
+  useEffect(() => { load(); }, []);
+  async function discharge(event) { event.preventDefault(); if (!selected) return setMessage('Select an active inpatient first.'); try { const result = await api(`/admissions/${selected}/discharge-to-outpatient`, { method: 'PATCH', body: JSON.stringify({ dischargeSummary: summary, finalDiagnosis: diagnosis }) }); setMessage(`${result.patient.patientNumber} is now an Outpatient.`); setSelected(''); setSummary(''); setDiagnosis(''); await load(); } catch (error) { setMessage(error.message); } }
+  return <div className="admission-page"><div className="page-toolbar"><div><p className="eyebrow">INPATIENT TO OUTPATIENT WORKFLOW</p><h2>Discharge to Outpatient</h2><p className="lede">Close room charges, release the bed, and continue the patient as an outpatient.</p></div><button className="secondary" onClick={load}><RefreshCw size={16} /> Refresh</button></div>{message && <div className="alert">{message}</div>}<form className="panel admission-step" onSubmit={discharge}><label>Active inpatient<select required value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Select patient / admission</option>{admissions.map((item) => <option key={item.id} value={item.id}>{item.patient.patientNumber} · {item.patient.firstName} {item.patient.lastName || ''} · Room {item.bed.room.number}</option>)}</select></label><label>Final diagnosis<textarea value={diagnosis} onChange={(event) => setDiagnosis(event.target.value)} rows="3" /></label><label>Discharge summary<textarea value={summary} onChange={(event) => setSummary(event.target.value)} rows="4" /></label><button className="primary"><LogOut size={17} /> Discharge to Outpatient</button></form></div>;
+}

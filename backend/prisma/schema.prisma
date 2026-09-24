@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  RECEPTION
+  LAB
+  PHARMACY
+}
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  WAITING
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+enum RegistrationType {
+  OP
+  OUTPATIENT
+  INPATIENT
+}
+enum LabOrderStatus {
+  ORDERED
+  SAMPLE_COLLECTED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+enum PaymentMode {
+  CASH
+  CARD
+  UPI
+  INSURANCE
+  OTHER
+}
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  username     String?   @unique
+  email        String    @unique
+  passwordHash String
+  role         Role
+  status       UserStatus @default(ACTIVE)
+  doctor       Doctor?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  auditLogs    AuditLog[]
+  labOrders    LabOrder[] @relation("OrderedBy")
+}
+
+model Department {
+  id        Int @id @default(autoincrement())
+  name      String @unique
+  doctors   Doctor[]
+  patients  Patient[]
+  appointments Appointment[]
+  labTests  LabTest[]
+}
+
+model Doctor {
+  id             Int @id @default(autoincrement())
+  userId         Int @unique
+  name           String
+  qualification  String?
+  specialization String?
+  departmentId   Int?
+  phone          String?
+  email          String?
+  consultationFee Float @default(0)
+  active         Boolean @default(true)
+  user           User @relation(fields: [userId], references: [id])
+  department     Department? @relation(fields: [departmentId], references: [id])
+  appointments   Appointment[]
+  consultations  Consultation[]
+  prescriptions  Prescription[]
+  admissions     Admission[]
+  outpatientVisits OutpatientVisit[]
+}
+
+model Patient {
+  id                    Int @id @default(autoincrement())
+  patientNumber         String @unique
+  registrationType      RegistrationType @default(OUTPATIENT)
+  firstName             String
+  lastName              String?
+  mobile                String
+  email                 String?
+  gender                String
+  title                 String?
+  dateOfBirth           DateTime?
+  age                   Int?
+  bloodGroup            String?
+  maritalStatus         String?
+  aadhaarNumber         String?
+  abhaNumber            String?
+  isMlc                 Boolean @default(false)
+  occupation            String?
+  countryCode           String? @default("+91")
+  address               String?
+  city                  String?
+  state                 String?
+  locality              String?
+  pinCode               String?
+  guardianName          String?
+  motherName            String?
+  guardianRelationship  String?
+  guardianMobile        String?
+  symptoms              String?
+  allergies             String?
+  medicalConditions     String?
+  emergencyContactName  String?
+  emergencyContactNumber String?
+  photoPath             String?
+  departmentId          Int?
+  referenceAgentId      Int?
+  department            Department? @relation(fields: [departmentId], references: [id])
+  referenceAgent        ReferenceAgent? @relation(fields: [referenceAgentId], references: [id])
+  appointments          Appointment[]
+  consultations         Consultation[]
+  prescriptions         Prescription[]
+  labOrders             LabOrder[]
+  invoices              Invoice[]
+  pharmacySales         PharmacySale[]
+  admissions            Admission[]
+  outpatientVisits      OutpatientVisit[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  @@index([mobile])
+  @@index([firstName, lastName])
+}
+
+model OutpatientVisit {
+  id                 Int @id @default(autoincrement())
+  patientId          Int
+  doctorId           Int?
+  visitType          String
+  referralType       String?
+  appointmentDate    DateTime?
+  appointmentTime    String?
+  consultationFee    Float @default(0)
+  registrationFee    Float @default(0)
+  paymentMode        PaymentMode @default(CASH)
+  discount           Float @default(0)
+  discountAmount     Float @default(0)
+  finalAmount        Float @default(0)
+  paidAmount         Float @default(0)
+  balanceAmount      Float @default(0)
+  patient            Patient @relation(fields: [patientId], references: [id])
+  doctor             Doctor? @relation(fields: [doctorId], references: [id])
+  createdAt          DateTime @default(now())
+  @@index([patientId, appointmentDate])
+}
+
+model ReferenceAgent {
+  id                 Int @id @default(autoincrement())
+  name               String
+  phone              String
+  occupation         String?
+  commissionPercent  Float @default(0)
+  active             Boolean @default(true)
+  patients           Patient[]
+  invoices           Invoice[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([name])
+  @@index([phone])
+}
+
+model Appointment {
+  id          Int @id @default(autoincrement())
+  patientId   Int
+  doctorId    Int
+  departmentId Int?
+  appointmentDate DateTime
+  appointmentTime String
+  reason      String?
+  status      AppointmentStatus @default(SCHEDULED)
+  patient     Patient @relation(fields: [patientId], references: [id])
+  doctor      Doctor @relation(fields: [doctorId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+  consultation Consultation?
+  createdAt   DateTime @default(now())
+  @@index([appointmentDate, doctorId])
+  @@unique([doctorId, appointmentDate, appointmentTime])
+}
+
+model Consultation {
+  id              Int @id @default(autoincrement())
+  patientId       Int
+  doctorId        Int
+  appointmentId   Int? @unique
+  chiefComplaint  String?
+  symptoms        String?
+  diagnosis       String?
+  examinationNotes String?
+  treatmentPlan   String?
+  followUpDate    DateTime?
+  doctorNotes     String?
+  patient         Patient @relation(fields: [patientId], references: [id])
+  doctor          Doctor @relation(fields: [doctorId], references: [id])
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+  prescription    Prescription?
+  labOrders       LabOrder[]
+  createdAt       DateTime @default(now())
+}
+
+model Prescription {
+  id             Int @id @default(autoincrement())
+  patientId      Int
+  doctorId       Int
+  consultationId Int? @unique
+  diagnosis      String?
+  patient        Patient @relation(fields: [patientId], references: [id])
+  doctor         Doctor @relation(fields: [doctorId], references: [id])
+  consultation   Consultation? @relation(fields: [consultationId], references: [id])
+  items          PrescriptionItem[]
+  createdAt      DateTime @default(now())
+}
+
+model PrescriptionItem {
+  id             Int @id @default(autoincrement())
+  prescriptionId Int
+  productId      Int?
+  medicineName   String
+  dosage         String?
+  frequency      String?
+  duration       String?
+  route          String?
+  instructions   String?
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  product        PharmacyProduct? @relation(fields: [productId], references: [id])
+}
+
+model PharmacyProduct {
+  id             Int @id @default(autoincrement())
+  name           String
+  genericName    String?
+  category       String?
+  manufacturer   String?
+  sku            String? @unique
+  hsnSac         String?
+  reorderLevel   Int @default(10)
+  status         ProductStatus @default(ACTIVE)
+  batches        PharmacyBatch[]
+  saleItems      PharmacySaleItem[]
+  prescriptionItems PrescriptionItem[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([name])
+}
+
+model PharmacyBatch {
+  id            Int @id @default(autoincrement())
+  productId     Int
+  batchNumber   String
+  expiryDate    DateTime
+  quantity      Int @default(0)
+  purchasePrice Float
+  sellingPrice  Float
+  taxPercentage Float @default(0)
+  supplier      String?
+  product       PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  saleItems     PharmacySaleItem[]
+  @@unique([productId, batchNumber])
+}
+
+model PharmacySale {
+  id          Int @id @default(autoincrement())
+  patientId   Int?
+  subtotal    Float
+  tax         Float
+  discount    Float @default(0)
+  total       Float
+  paymentMode PaymentMode
+  patient     Patient? @relation(fields: [patientId], references: [id])
+  items       PharmacySaleItem[]
+  createdAt   DateTime @default(now())
+}
+
+model PharmacySaleItem {
+  id        Int @id @default(autoincrement())
+  saleId    Int
+  productId Int
+  batchId   Int
+  quantity  Int
+  unitPrice Float
+  tax       Float
+  sale      PharmacySale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   PharmacyProduct @relation(fields: [productId], references: [id])
+  batch     PharmacyBatch @relation(fields: [batchId], references: [id])
+}
+
+model LabTest {
+  id          Int @id @default(autoincrement())
+  name        String
+  code        String @unique
+  departmentId Int?
+  price       Float
+  sampleType  String?
+  normalRange String?
+  active      Boolean @default(true)
+  department  Department? @relation(fields: [departmentId], references: [id])
+  orderItems  LabOrderItem[]
+}
+
+model LabOrder {
+  id            Int @id @default(autoincrement())
+  patientId     Int
+  orderedById   Int
+  consultationId Int?
+  status        LabOrderStatus @default(ORDERED)
+  technicianNotes String?
+  patient       Patient @relation(fields: [patientId], references: [id])
+  orderedBy     User @relation("OrderedBy", fields: [orderedById], references: [id])
+  consultation  Consultation? @relation(fields: [consultationId], references: [id])
+  items         LabOrderItem[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model LabOrderItem {
+  id          Int @id @default(autoincrement())
+  labOrderId  Int
+  labTestId   Int
+  result      LabResult?
+  labOrder    LabOrder @relation(fields: [labOrderId], references: [id], onDelete: Cascade)
+  labTest     LabTest @relation(fields: [labTestId], references: [id])
+}
+
+model LabResult {
+  id           Int @id @default(autoincrement())
+  orderItemId  Int @unique
+  sampleDate   DateTime?
+  result       String
+  unit         String?
+  normalRange  String?
+  remarks      String?
+  completedAt  DateTime?
+  orderItem    LabOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id            Int @id @default(autoincrement())
+  invoiceNumber String @unique
+  patientId     Int
+  subtotal      Float
+  discount      Float @default(0)
+  tax           Float @default(0)
+  total         Float
+  paid          Float @default(0)
+  referenceAgentId Int?
+  commissionPercent Float @default(0)
+  commissionAmount Float @default(0)
+  status        PaymentStatus @default(PENDING)
+  patient       Patient @relation(fields: [patientId], references: [id])
+  referenceAgent ReferenceAgent? @relation(fields: [referenceAgentId], references: [id])
+  items         InvoiceItem[]
+  payments      Payment[]
+  createdAt     DateTime @default(now())
+}
+
+model InvoiceItem {
+  id          Int @id @default(autoincrement())
+  invoiceId   Int
+  description String
+  category    String
+  quantity    Int @default(1)
+  unitPrice   Float
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          Int @id @default(autoincrement())
+  invoiceId   Int?
+  amount      Float
+  mode        PaymentMode
+  reference   String?
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Ward {
+  id     Int @id @default(autoincrement())
+  name   String @unique
+  rooms  Room[]
+}
+
+model Room {
+  id       Int @id @default(autoincrement())
+  wardId   Int
+  number   String
+  roomType String
+  dailyRate Float @default(0)
+  ward     Ward @relation(fields: [wardId], references: [id])
+  beds     Bed[]
+  roomStays AdmissionRoomStay[]
+  @@unique([wardId, number])
+}
+
+model Bed {
+  id       Int @id @default(autoincrement())
+  roomId   Int
+  number   String
+  status   BedStatus @default(AVAILABLE)
+  room     Room @relation(fields: [roomId], references: [id])
+  admissions Admission[]
+  roomStays AdmissionRoomStay[]
+  @@unique([roomId, number])
+}
+
+model Admission {
+  id             Int @id @default(autoincrement())
+  patientId      Int
+  bedId          Int
+  doctorId       Int?
+  referredDays   Int?
+  vitals         String?
+  admissionDate  DateTime @default(now())
+  dischargeDate  DateTime?
+  status         String @default("ADMITTED")
+  attendantName  String?
+  attendantMobile String?
+  dischargeSummary String?
+  finalDiagnosis String?
+  patient        Patient @relation(fields: [patientId], references: [id])
+  bed            Bed @relation(fields: [bedId], references: [id])
+  doctor         Doctor? @relation(fields: [doctorId], references: [id])
+  roomStays      AdmissionRoomStay[]
+}
+
+model AdmissionRoomStay {
+  id           Int @id @default(autoincrement())
+  admissionId  Int
+  roomId       Int
+  bedId        Int
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+  dailyRate    Float
+  admission    Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
+  room         Room @relation(fields: [roomId], references: [id])
+  bed          Bed @relation(fields: [bedId], references: [id])
+  @@index([admissionId, startedAt])
+}
+
+model AuditLog {
+  id        Int @id @default(autoincrement())
+  userId    Int?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?
+  user      User? @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}

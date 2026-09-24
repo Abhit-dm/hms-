@@ -1,0 +1,2 @@
+.patient-match{display:block;width:100%;margin-top:7px;padding:10px;text-align:left;border:1px solid var(--border);background:#f8fafc;border-radius:6px;color:var(--navy)}.patient-match:hover{border-color:#7da4f5;background:#f0f5ff}
+.registration-section:nth-of-type(4) .registration-grid label:nth-child(3),.registration-section:nth-of-type(4) .registration-grid label:nth-child(4),.registration-section:nth-of-type(4) .registration-grid label:nth-child(5){display:none}
