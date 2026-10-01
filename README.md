@@ -62,11 +62,7 @@ SQLite is retained for local development and single-instance evaluation. For pro
 
 There are two common causes; check both.
 
-**A. Frontend still points at `localhost` (most common on Hostinger).** The frontend reads `VITE_API_URL` at *build time*. If you build/upload the frontend without setting it, the deployed site uses the configured fallback. Fix: create `frontend/.env` (or `frontend/.env.production`) with
-```
-VITE_API_URL=https://abhitcare.cloud/api
-```
-then rebuild (`npm --prefix frontend run build`) and re-upload the `frontend/dist` output. Also set `CORS_ORIGIN` in `backend/.env` to that same frontend URL so the API accepts the request.
+**A. Frontend still points at `localhost` (most common on Hostinger).** Production builds use `https://abhitcare.cloud/api` regardless of `VITE_API_URL`. If the deployed site still calls `localhost`, it is serving an older frontend bundle. Rebuild (`npm --prefix frontend run build`) and re-upload the `frontend/dist` output. Also set `CORS_ORIGIN` in `backend/.env` to the frontend URL so the API accepts the request.
 
 **B. Backend can't reach the SQLite file.** `.env` and `*.db` are in `.gitignore` on purpose (secrets/binary data should not be committed), which means a plain git/zip deploy will NOT upload `backend/.env` or `database/dev.db`. Missing `.env` (no `DATABASE_URL`/`JWT_SECRET`) or a missing/empty database file is the next most common cause. To fix it on the server:
 

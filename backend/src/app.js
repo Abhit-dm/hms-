@@ -19,6 +19,7 @@ app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? 
 app.use(cors({ origin: (origin, callback) => { const localDevOrigin = process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):51\d{2}$/.test(origin || ''); return !origin || allowedOrigins.includes(origin) || localDevOrigin ? callback(null, true) : callback(new Error('Origin is not allowed by CORS')); } }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+app.use((req, _res, next) => { if (!req.path.startsWith('/api/')) req.url = `/api${req.url}`; next(); });
 const validate = (req, res, next) => { const errors = validationResult(req); return errors.isEmpty() ? next() : res.status(400).json({ message: errors.array()[0].msg }); };
 const audit = async (userId, action, entity, entityId) => { try { await prisma.auditLog.create({ data: { userId, action, entity, entityId: String(entityId ?? '') } }); } catch (error) { console.error('Audit log write failed', error); } };
 const patientInclude = { department: true };
