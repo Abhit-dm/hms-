@@ -58,6 +58,51 @@ npm run db:studio
 
 SQLite is retained for local development and single-instance evaluation. For production, use PostgreSQL or MySQL, managed backups, TLS termination, secret management, monitoring, key rotation, and a formal migration/rehearsal process. The API now enforces security headers, CORS allowlisting, login throttling, input bounds, audit writes, and database-level appointment slot uniqueness.
 
+### DEPLOYING TO HOSTINGER (SQLITE) — FIXING "DATABASE CONNECTION FAILED" AT LOGIN
+
+There are two common causes; check both.
+
+**A. Frontend still points at `localhost` (most common on Hostinger).** The frontend reads `VITE_API_URL` at *build time*. If you build/upload the frontend without setting it, the deployed site keeps calling `http://localhost:5000/api`, which fails from a real browser and shows up as a login/connection error. Fix: create `frontend/.env` (or `frontend/.env.production`) with
+```
+VITE_API_URL=https://your-domain.com/api
+```
+then rebuild (`npm --prefix frontend run build`) and re-upload the `frontend/dist` output. Also set `CORS_ORIGIN` in `backend/.env` to that same frontend URL so the API accepts the request.
+
+**B. Backend can't reach the SQLite file.** `.env` and `*.db` are in `.gitignore` on purpose (secrets/binary data should not be committed), which means a plain git/zip deploy will NOT upload `backend/.env` or `database/dev.db`. Missing `.env` (no `DATABASE_URL`/`JWT_SECRET`) or a missing/empty database file is the next most common cause. To fix it on the server:
+
+1. Create `backend/.env` on the server (it will not exist after a git-based deploy):
+   ```
+   PORT=5000
+   DATABASE_URL="file:../database/dev.db"
+   JWT_SECRET="<a-random-32+-character-secret>"
+   CORS_ORIGIN="https://your-domain.com"
+   NODE_ENV=production
+   TRUST_PROXY=true
+   ```
+2. Make sure the `database/` folder exists next to `backend/` and is writable by the Node process (`mkdir -p database` at the repo root, then `chmod 775 database`).
+3. Install dependencies and generate the Prisma client **on the server** (do not upload `node_modules` from Windows — the Prisma engine binary is platform-specific):
+   ```
+   npm --prefix backend install
+   npm run db:generate
+   ```
+4. Apply migrations to create the SQLite schema/tables:
+   ```
+   npm run db:migrate:deploy
+   ```
+5. Create the admin login (safe to run in production, unlike `db:seed` which is blocked when `NODE_ENV=production`):
+   ```
+   npm run db:create-admin
+   ```
+   Optionally override defaults: `ADMIN_EMAIL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_NAME` environment variables.
+6. Start the API (`npm --prefix backend run start`) and confirm `GET /api/ready` returns `{"status":"ready","database":"ok"}`.
+
+#### Default admin login (created by `npm run db:create-admin`)
+
+- Username or email: `admin` or `admin@hms.local`
+- Password: `Admin@123`
+
+Change this password immediately after first login, or set `ADMIN_PASSWORD` before running the command to choose your own.
+
 Run `npm --prefix backend audit --omit=dev` before deployment. At this revision npm reports three high-severity advisories in Prisma's `deepmerge-ts` dependency chain, with no non-breaking fix available; upgrade Prisma across its major-version boundary only after a dedicated compatibility and migration review.
 
 ## KNOWN DEVELOPMENT LIMITATIONS

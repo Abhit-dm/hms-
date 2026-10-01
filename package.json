@@ -8,7 +8,9 @@
     "build": "npm --prefix frontend run build",
     "db:generate": "npm --prefix backend run prisma:generate",
     "db:migrate": "npm --prefix backend run prisma:migrate",
+    "db:migrate:deploy": "npm --prefix backend run prisma:migrate:deploy",
     "db:seed": "npm --prefix backend run prisma:seed",
+    "db:create-admin": "npm --prefix backend run prisma:create-admin",
     "db:studio": "npm --prefix backend run prisma:studio"
   },
   "devDependencies": { "concurrently": "^9.1.2" }

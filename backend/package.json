@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
+    "prisma:create-admin": "node prisma/create-admin.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
