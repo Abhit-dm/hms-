@@ -35,7 +35,7 @@ SQLite database: `database/dev.db`. Its path is configured through `backend/.env
 
 ## API URL
 
-http://localhost:5000/api
+https://abhitcare.cloud/api
 
 ## FRONTEND URL
 
@@ -62,9 +62,9 @@ SQLite is retained for local development and single-instance evaluation. For pro
 
 There are two common causes; check both.
 
-**A. Frontend still points at `localhost` (most common on Hostinger).** The frontend reads `VITE_API_URL` at *build time*. If you build/upload the frontend without setting it, the deployed site keeps calling `http://localhost:5000/api`, which fails from a real browser and shows up as a login/connection error. Fix: create `frontend/.env` (or `frontend/.env.production`) with
+**A. Frontend still points at `localhost` (most common on Hostinger).** The frontend reads `VITE_API_URL` at *build time*. If you build/upload the frontend without setting it, the deployed site uses the configured fallback. Fix: create `frontend/.env` (or `frontend/.env.production`) with
 ```
-VITE_API_URL=https://your-domain.com/api
+VITE_API_URL=https://abhitcare.cloud/api
 ```
 then rebuild (`npm --prefix frontend run build`) and re-upload the `frontend/dist` output. Also set `CORS_ORIGIN` in `backend/.env` to that same frontend URL so the API accepts the request.
 
