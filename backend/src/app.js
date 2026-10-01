@@ -12,11 +12,23 @@ import { authenticate, authorize } from './middleware/auth.js';
 
 export const prisma = new PrismaClient();
 export const app = express();
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://abhitcare.cloud',
+  'https://www.abhitcare.cloud',
+  ...(process.env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
+];
 if (process.env.NODE_ENV === 'production' && (!process.env.CORS_ORIGIN || process.env.JWT_SECRET?.length < 32)) throw new Error('CORS_ORIGIN and a 32-character JWT_SECRET are required in production');
 app.set('trust proxy', process.env.TRUST_PROXY === 'true');
 app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false }));
-app.use(cors({ origin: (origin, callback) => { const localDevOrigin = process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):51\d{2}$/.test(origin || ''); return !origin || allowedOrigins.includes(origin) || localDevOrigin ? callback(null, true) : callback(new Error('Origin is not allowed by CORS')); } }));
+app.use(cors({
+  origin: (origin, callback) => {
+    const localDevOrigin = process.env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1):51\d{2}$/.test(origin || '');
+    return !origin || allowedOrigins.includes(origin) || localDevOrigin ? callback(null, true) : callback(new Error('Origin is not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use((req, _res, next) => { if (!req.path.startsWith('/api/')) req.url = `/api${req.url}`; next(); });
