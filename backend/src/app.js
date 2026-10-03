@@ -97,9 +97,92 @@ app.post('/api/lab/results', authenticate, authorize('ADMIN', 'LAB'), [body('ord
 app.post('/api/consultations', authenticate, authorize('ADMIN', 'DOCTOR'), [body('patientId').isInt(), body('doctorId').isInt()], validate, async (req, res, next) => { try { const consultation = await prisma.consultation.create({ data: { patientId: Number(req.body.patientId), doctorId: Number(req.body.doctorId), appointmentId: req.body.appointmentId ? Number(req.body.appointmentId) : undefined, chiefComplaint: req.body.chiefComplaint, symptoms: req.body.symptoms, diagnosis: req.body.diagnosis, examinationNotes: req.body.examinationNotes, treatmentPlan: req.body.treatmentPlan, doctorNotes: req.body.doctorNotes, followUpDate: req.body.followUpDate ? new Date(req.body.followUpDate) : undefined } }); if (req.body.appointmentId) await prisma.appointment.update({ where: { id: Number(req.body.appointmentId) }, data: { status: 'COMPLETED' } }); await audit(req.user.id, 'CONSULTATION_CREATED', 'Consultation', consultation.id); res.status(201).json(consultation); } catch (error) { next(error); } });
 app.post('/api/prescriptions', authenticate, authorize('ADMIN', 'DOCTOR'), [body('patientId').isInt(), body('doctorId').isInt(), body('items').isArray({ min: 1 })], validate, async (req, res, next) => { try { const prescription = await prisma.prescription.create({ data: { patientId: Number(req.body.patientId), doctorId: Number(req.body.doctorId), consultationId: req.body.consultationId ? Number(req.body.consultationId) : undefined, diagnosis: req.body.diagnosis, items: { create: req.body.items.map((item) => ({ productId: item.productId ? Number(item.productId) : undefined, medicineName: item.medicineName, dosage: item.dosage, frequency: item.frequency, duration: item.duration, route: item.route, instructions: item.instructions })) } }, include: { items: true } }); await audit(req.user.id, 'PRESCRIPTION_CREATED', 'Prescription', prescription.id); res.status(201).json(prescription); } catch (error) { next(error); } });
 
-app.get('/api/billing/invoices', authenticate, async (req, res, next) => { try { const invoices = await prisma.invoice.findMany({ where: req.query.patientId ? { patientId: Number(req.query.patientId) } : {}, include: { patient: true, items: true, payments: true }, orderBy: { createdAt: 'desc' } }); res.json(invoices); } catch (error) { next(error); } });
-app.post('/api/billing/invoices-with-reference', authenticate, authorize('ADMIN', 'RECEPTION'), [body('patientId').isInt(), body('items').isArray({ min: 1 }), body('referenceAgentId').optional().isInt(), body('discount').optional().isFloat({ min: 0 }), body('tax').optional().isFloat({ min: 0 })], validate, async (req, res, next) => { try { const subtotal = req.body.items.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unitPrice), 0); const discount = Number(req.body.discount || 0); const tax = Number(req.body.tax || 0); const agent = req.body.referenceAgentId ? await prisma.referenceAgent.findFirst({ where: { id: Number(req.body.referenceAgentId), active: true } }) : null; if (req.body.referenceAgentId && !agent) return res.status(404).json({ message: 'Reference agent not found' }); const commissionPercent = agent?.commissionPercent || 0; const total = subtotal + tax - discount; const invoice = await prisma.invoice.create({ data: { invoiceNumber: `INV-${Date.now()}`, patientId: Number(req.body.patientId), referenceAgentId: agent?.id, commissionPercent, commissionAmount: total * commissionPercent / 100, subtotal, discount, tax, total, items: { create: req.body.items.map((item) => ({ description: item.description, category: item.category || 'Other', quantity: Number(item.quantity || 1), unitPrice: Number(item.unitPrice) })) } }, include: { items: true, patient: true, referenceAgent: true } }); await audit(req.user.id, 'INVOICE_CREATED', 'Invoice', invoice.id); res.status(201).json(invoice); } catch (error) { next(error); } });
-app.post('/api/billing/invoices', authenticate, authorize('ADMIN', 'RECEPTION'), [body('patientId').isInt(), body('items').isArray({ min: 1 })], validate, async (req, res, next) => { try { const subtotal = req.body.items.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unitPrice), 0); const discount = Number(req.body.discount || 0); const tax = Number(req.body.tax || 0); const invoice = await prisma.invoice.create({ data: { invoiceNumber: `INV-${Date.now()}`, patientId: Number(req.body.patientId), subtotal, discount, tax, total: subtotal + tax - discount, items: { create: req.body.items.map((item) => ({ description: item.description, category: item.category || 'Other', quantity: Number(item.quantity || 1), unitPrice: Number(item.unitPrice) })) } }, include: { items: true, patient: true } }); await audit(req.user.id, 'INVOICE_CREATED', 'Invoice', invoice.id); res.status(201).json(invoice); } catch (error) { next(error); } });
+app.get('/api/billing/invoices', authenticate, async (req, res, next) => { try { const where = { ...(req.query.patientId ? { patientId: Number(req.query.patientId) } : {}), ...(req.query.type ? { invoiceType: String(req.query.type) } : {}) }; const invoices = await prisma.invoice.findMany({ where, include: { patient: true, items: true, payments: true, admission: true }, orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }] }); res.json(invoices); } catch (error) { next(error); } });
+app.post('/api/billing/invoices-with-reference', authenticate, authorize('ADMIN', 'RECEPTION'), [body('patientId').isInt({ min: 1 }), body('items').isArray({ min: 1 }), body('referenceAgentId').optional().isInt({ min: 1 }), body('discount').optional().isFloat({ min: 0 }), body('tax').optional().isFloat({ min: 0 })], validate, async (req, res, next) => { try { const subtotal = req.body.items.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unitPrice), 0); const discount = Number(req.body.discount || 0); const tax = Number(req.body.tax || 0); const agent = req.body.referenceAgentId ? await prisma.referenceAgent.findFirst({ where: { id: Number(req.body.referenceAgentId), active: true } }) : null; if (req.body.referenceAgentId && !agent) return res.status(404).json({ message: 'Reference agent not found' }); const commissionPercent = agent?.commissionPercent || 0; const total = subtotal + tax - discount; const invoice = await prisma.invoice.create({ data: { invoiceNumber: `INV-${Date.now()}`, patientId: Number(req.body.patientId), referenceAgentId: agent?.id, commissionPercent, commissionAmount: total * commissionPercent / 100, subtotal, discount, tax, total, items: { create: req.body.items.map((item) => ({ description: item.description, category: item.category || 'Other', quantity: Number(item.quantity || 1), unitPrice: Number(item.unitPrice) })) } }, include: { items: true, patient: true, referenceAgent: true } }); await audit(req.user.id, 'INVOICE_CREATED', 'Invoice', invoice.id); res.status(201).json(invoice); } catch (error) { next(error); } });
+app.post('/api/billing/invoices', authenticate, authorize('ADMIN', 'RECEPTION'), [
+  body('patientId').isInt({ min: 1 }),
+  body('items').isArray({ min: 1 }),
+  body('items.*.description').trim().notEmpty(),
+  body('items.*.category').optional().trim().notEmpty(),
+  body('items.*.quantity').optional().isInt({ min: 1, max: 100000 }),
+  body('items.*.unitPrice').isFloat({ min: 0, max: 100000000 }),
+  body('invoiceType').optional().isIn(['GENERAL', 'OP', 'IP']),
+  body('invoiceDate').optional().isISO8601(),
+  body('admissionId').optional().isInt({ min: 1 }),
+  body('discount').optional().isFloat({ min: 0 }),
+  body('tax').optional().isFloat({ min: 0 }),
+  body('initialPayment').optional().isFloat({ min: 0 }),
+  body('paymentMode').optional().isIn(['CASH', 'CARD', 'UPI', 'INSURANCE', 'OTHER'])
+], validate, async (req, res, next) => {
+  try {
+    const patientId = Number(req.body.patientId);
+    const admissionId = req.body.admissionId ? Number(req.body.admissionId) : undefined;
+    if (admissionId) {
+      const admission = await prisma.admission.findFirst({ where: { id: admissionId, patientId } });
+      if (!admission) return res.status(400).json({ message: 'Admission does not belong to this patient' });
+    }
+    const subtotal = req.body.items.reduce((sum, item) => sum + Number(item.quantity || 1) * Number(item.unitPrice), 0);
+    const discount = Number(req.body.discount || 0);
+    const tax = Number(req.body.tax || 0);
+    const total = subtotal + tax - discount;
+    const initialPayment = Number(req.body.initialPayment || 0);
+    if (discount > subtotal + tax) return res.status(400).json({ message: 'Discount cannot exceed the bill total' });
+    if (initialPayment > total) return res.status(400).json({ message: 'Payment cannot exceed the bill total' });
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber: `${req.body.invoiceType || 'INV'}-${Date.now()}`,
+        invoiceType: req.body.invoiceType || 'GENERAL',
+        invoiceDate: req.body.invoiceDate ? new Date(req.body.invoiceDate) : new Date(),
+        patientId,
+        admissionId,
+        subtotal,
+        discount,
+        tax,
+        total,
+        paid: initialPayment,
+        status: initialPayment === total ? 'PAID' : initialPayment > 0 ? 'PARTIAL' : 'PENDING',
+        items: { create: req.body.items.map((item) => ({ description: item.description, category: item.category || 'Other', quantity: Number(item.quantity || 1), unitPrice: Number(item.unitPrice) })) },
+        ...(initialPayment > 0 ? { payments: { create: { amount: initialPayment, mode: req.body.paymentMode || 'CASH' } } } : {})
+      },
+      include: { items: true, patient: true, payments: true, admission: true }
+    });
+    await audit(req.user.id, 'INVOICE_CREATED', 'Invoice', invoice.id);
+    res.status(201).json(invoice);
+  } catch (error) { next(error); }
+});
+app.patch('/api/billing/invoices/:id/date', authenticate, authorize('ADMIN', 'RECEPTION'), [body('invoiceDate').isISO8601()], validate, async (req, res, next) => {
+  try {
+    const invoice = await prisma.invoice.update({ where: { id: Number(req.params.id) }, data: { invoiceDate: new Date(req.body.invoiceDate) }, include: { patient: true, items: true, payments: true } });
+    await audit(req.user.id, 'INVOICE_DATE_ADJUSTED', 'Invoice', invoice.id);
+    res.json(invoice);
+  } catch (error) { next(error); }
+});
+app.get('/api/billing/advance-payments', authenticate, authorize('ADMIN', 'RECEPTION'), async (_req, res, next) => {
+  try { res.json(await prisma.advancePayment.findMany({ include: { patient: true, admission: true }, orderBy: { createdAt: 'desc' } })); }
+  catch (error) { next(error); }
+});
+app.post('/api/billing/advance-payments', authenticate, authorize('ADMIN', 'RECEPTION'), [
+  body('patientId').isInt({ min: 1 }),
+  body('admissionId').optional().isInt({ min: 1 }),
+  body('amount').isFloat({ gt: 0, max: 100000000 }),
+  body('mode').isIn(['CASH', 'CARD', 'UPI', 'INSURANCE', 'OTHER']),
+  body('reference').optional().trim().isLength({ max: 200 })
+], validate, async (req, res, next) => {
+  try {
+    const patientId = Number(req.body.patientId);
+    const admissionId = req.body.admissionId ? Number(req.body.admissionId) : undefined;
+    if (admissionId) {
+      const admission = await prisma.admission.findFirst({ where: { id: admissionId, patientId } });
+      if (!admission) return res.status(400).json({ message: 'Admission does not belong to this patient' });
+    }
+    const payment = await prisma.advancePayment.create({
+      data: { patientId, admissionId, amount: Number(req.body.amount), mode: req.body.mode, reference: req.body.reference },
+      include: { patient: true, admission: true }
+    });
+    await audit(req.user.id, 'INPATIENT_ADVANCE_PAYMENT_RECORDED', 'AdvancePayment', payment.id);
+    res.status(201).json(payment);
+  } catch (error) { next(error); }
+});
 app.post('/api/billing/invoices/:id/payments', authenticate, authorize('ADMIN', 'RECEPTION'), [body('amount').isFloat({ min: 0 }), body('mode').isIn(['CASH', 'CARD', 'UPI', 'INSURANCE', 'OTHER'])], validate, async (req, res, next) => { try { const invoice = await prisma.$transaction(async (tx) => { const current = await tx.invoice.findUnique({ where: { id: Number(req.params.id) } }); if (!current) throw Object.assign(new Error('Invoice not found'), { status: 404 }); const paid = current.paid + Number(req.body.amount); if (paid > current.total) throw Object.assign(new Error('Payment exceeds due amount'), { status: 400 }); await tx.payment.create({ data: { invoiceId: current.id, amount: Number(req.body.amount), mode: req.body.mode, reference: req.body.reference } }); return tx.invoice.update({ where: { id: current.id }, data: { paid, status: paid === current.total ? 'PAID' : 'PARTIAL' }, include: { payments: true } }); }); await audit(req.user.id, 'PAYMENT_RECORDED', 'Invoice', invoice.id); res.status(201).json(invoice); } catch (error) { res.status(error.status || 500).json({ message: error.status ? error.message : 'Unable to record payment' }); } });
 
 app.get('/api/beds/available', authenticate, authorize('ADMIN', 'RECEPTION'), async (_req, res, next) => { try { res.json(await prisma.bed.findMany({ where: { status: 'AVAILABLE' }, include: { room: { include: { ward: true } } }, orderBy: [{ room: { dailyRate: 'asc' } }, { room: { number: 'asc' } }, { number: 'asc' }] })); } catch (error) { next(error); } });

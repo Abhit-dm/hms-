@@ -43,7 +43,7 @@ http://localhost:5173
 
 ## MAIN HMS WORKFLOW
 
-Login → role dashboard → patient registration/search → appointment queue → laboratory orders/results → pharmacy stock and sales → billing and payment records. The implemented API persists patients, appointments, products, batches, pharmacy sales, lab orders/results, users, and audit events in SQLite.
+Login → role dashboard → patient registration/search → appointment queue → laboratory orders/results → pharmacy stock and sales → OP/IP billing, inpatient advance payments, and bill summaries. The API persists patients, invoices, invoice payments, inpatient advances, appointments, products, batches, pharmacy sales, lab orders/results, users, and audit events in SQLite. Completing an OP registration prints the registration slip and bill on A4 paper.
 
 ## DATABASE COMMANDS
 
@@ -103,4 +103,4 @@ Run `npm --prefix backend audit --omit=dev` before deployment. At this revision 
 
 ## KNOWN DEVELOPMENT LIMITATIONS
 
-The initial local release focuses on the working authenticated vertical slice. Consultation authoring, prescriptions, general invoice/payment screens, inpatient admission/discharge UI, file uploads, printable templates, reporting filters, and full CRUD screens remain to be expanded. Pharmacy login and billing are available through the authenticated `/api/pharmacy/sales` workflow; the current pharmacy frontend view is still primarily stock-oriented and needs a dedicated cashier screen. The backend schema already includes the core entities for the remaining modules. Password reset, refresh tokens, production deployment hardening, encryption, backups, compliance controls, and real medical-data validation are not included.
+The initial local release focuses on the working authenticated vertical slice. Consultation authoring, prescriptions, reporting filters, and some full CRUD screens remain to be expanded. OP/IP billing, room-related inpatient charges, advance payments, invoice-date adjustment, and printable A4 bills are available to Admin and Reception. Pharmacy login and billing are available through the authenticated `/api/pharmacy/sales` workflow; the current pharmacy frontend view is still primarily stock-oriented and needs a dedicated cashier screen. Password reset, refresh tokens, production deployment hardening, encryption, backups, compliance controls, and real medical-data validation are not included.

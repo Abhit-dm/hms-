@@ -152,6 +152,7 @@ model Patient {
   pharmacySales         PharmacySale[]
   admissions            Admission[]
   outpatientVisits      OutpatientVisit[]
+  advancePayments       AdvancePayment[]
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   @@index([mobile])
@@ -385,6 +386,10 @@ model Invoice {
   referenceAgent ReferenceAgent? @relation(fields: [referenceAgentId], references: [id])
   items         InvoiceItem[]
   payments      Payment[]
+  admissionId  Int?
+  admission    Admission? @relation(fields: [admissionId], references: [id])
+  invoiceType  String @default("GENERAL")
+  invoiceDate  DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -406,6 +411,20 @@ model Payment {
   reference   String?
   invoice     Invoice? @relation(fields: [invoiceId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model AdvancePayment {
+  id          Int @id @default(autoincrement())
+  patientId   Int
+  admissionId Int?
+  amount      Float
+  mode        PaymentMode
+  reference   String?
+  patient     Patient @relation(fields: [patientId], references: [id])
+  admission   Admission? @relation(fields: [admissionId], references: [id])
+  createdAt   DateTime @default(now())
+  @@index([patientId, createdAt])
+  @@index([admissionId, createdAt])
 }
 
 model Ward {
@@ -455,6 +474,8 @@ model Admission {
   bed            Bed @relation(fields: [bedId], references: [id])
   doctor         Doctor? @relation(fields: [doctorId], references: [id])
   roomStays      AdmissionRoomStay[]
+  invoices       Invoice[]
+  advancePayments AdvancePayment[]
 }
 
 model AdmissionRoomStay {
